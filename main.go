@@ -130,7 +130,10 @@ func MakeOauthCallback(
 			c.Status(resp.StatusCode)
 			return nil
 		}
-		tok := mkTok(sess)
+		tok, err := mkTok(sess)
+		if err != nil {
+			return err
+		}
 		return c.JSON(tok)
 	}
 }
@@ -183,12 +186,12 @@ func MakeGetUserInfo(rs RetrieveSession) fiber.Handler {
 		return err
 	}
 }
-func MakeNewSessionToken(sess Session) NewSessionToken {
-	return func() *jwt.Token {
-		t := jwt.New(jwt.SigningMethodHS256)
-		c := t.Claims.(jwt.MapClaims)
-		c["sid"] = sess.ID()
-		return t
+func MakeNewSessionToken(key interface{}) NewSessionToken {
+	return func(sess Session) (t string, err error) {
+		tok := jwt.New(jwt.SigningMethodHS256)
+		c := tok.Claims.(jwt.MapClaims)
+		c["sub"] = sess.ID()
+		return tok.SignedString(key)
 	}
 }
 func MakeProxy(prefix string, getAuthToken GetAuthToken) fiber.Handler {
