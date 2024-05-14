@@ -1,7 +1,10 @@
 package main
 
 import (
+	"actdata/models"
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,9 +16,12 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 
 	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/golang-jwt/jwt/v5"
+	_ "modernc.org/sqlite"
 )
 
 const polarflow = "https://flow.polar.com"
@@ -28,53 +34,66 @@ type AccessToken struct {
 }
 
 func main() {
+	fmt.Printf("%+v", f())
+}
+func f() error {
 	app := fiber.New()
-	// prefix := "/proxy"
+	ctx := context.Background()
+	db, err := sql.Open("sqlite", "./database.db")
+	if err != nil {
+		return err
+	}
+	prefix := "/proxy"
 	oauth2_callback := "/oauth2_callback"
 	redirect_url := "http://localhost:8000" + oauth2_callback
-	// app.Post("/session", MakePostSession())
+	secret := []byte(os.Getenv("TOKEN_SECRET"))
+	getS := MakeGetSession(ctx, db)
+	retrieveS := MakeRetrieveSession(getS, secret)
 	app.Get(oauth2_callback, MakeOauthCallback(
-		os.Getenv("CLIENT_ID"),
-		os.Getenv("CLIENT_SECRET"),
-		redirect_url,
+		MakeCode2Token(
+			os.Getenv("CLIENT_ID"),
+			os.Getenv("CLIENT_SECRET"),
+		),
+		MakeNewSessionToken(secret),
+		MakeNewSession(ctx, db),
 	))
-	// app.Use(prefix, MakeProxy(prefix, MakeGetAuthToken()))
+	app.Get("/measurements", MakeMeasurements(ctx, db, retrieveS))
+	app.Use(prefix, MakeProxy(prefix, retrieveS))
 	fmt.Println(redirect_url)
-	app.Listen(":8000")
+	return app.Listen(":8000")
 }
 
 type GetAuthToken func(string) (string, error)
 
-func MakeGetAuthToken() GetAuthToken {
-	panic("not implemented")
-	// return func(ses string) (string, error) {
-	// 	panic("not implemented")
-	// }
+func MakeMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ses, err := rs(c)
+		if err != nil {
+			return err
+		}
+		ms, err := models.Measurements(qm.Where("session_id = ?", ses.ID())).All(ctx, db)
+		if err != nil {
+			return err
+		}
+		return c.JSON(ms)
+	}
 }
 
-func MakeOauthCallback(
-	cli_id,
-	cli_secret,
-	redirect_url string,
-	mkSession NewSession,
-	mkTok NewSessionToken,
-) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		code := c.Query("code")
-		if code == "" {
-			return fiber.ErrBadRequest
-		}
-		var body bytes.Buffer
+type Code2Token func(code string) (at AccessToken, err error)
+
+func MakeCode2Token(cli_id, cli_secret string) Code2Token {
+	return func(code string) (at AccessToken, err error) {
+		var bodybuf bytes.Buffer
 		bs, err := json.Marshal(map[string]interface{}{
 			"grant_type": "authorization_code",
 			"code":       code,
 		})
 		if err != nil {
-			return err
+			return
 		}
-		_, err = body.Write(bs)
+		_, err = bodybuf.Write(bs)
 		if err != nil {
-			return err
+			return
 		}
 		vals := url.Values{}
 		vals.Add("grant_type", "authorization_code")
@@ -85,42 +104,60 @@ func MakeOauthCallback(
 			strings.NewReader(vals.Encode()),
 		)
 		if err != nil {
-			return err
+			return
 		}
+		fmt.Printf("cli_id: %v\n", cli_id)
+		fmt.Printf("cli_secret: %v\n", cli_secret)
+		auth := base64.StdEncoding.EncodeToString([]byte(cli_id + ":" + cli_secret))
+		fmt.Printf("auth: %v\n", auth)
 		req.Header.Set(
 			"Authorization",
-			"Basic "+base64.StdEncoding.EncodeToString([]byte(cli_id+":"+cli_secret)),
+			"Basic "+auth,
 		)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		resp, err := http.DefaultClient.Do(req)
 		fmt.Printf("resp.StatusCode: %v\n", resp.StatusCode)
-		var tk AccessToken
-		if err := json.NewDecoder(resp.Body).Decode(&tk); err != nil {
-			return err
+		err = json.NewDecoder(resp.Body).Decode(&at)
+		return
+	}
+}
+func MakeOauthCallback(
+	c2t Code2Token,
+	mkTok NewSessionToken,
+	newSession NewSession,
+) fiber.Handler { // {{{
+	return func(c *fiber.Ctx) error {
+		code := c.Query("code")
+		if code == "" {
+			return fiber.ErrBadRequest
 		}
-		sess, err := mkSession(tk.Value, tk.XUserID)
+		tk, err := c2t(code)
 		if err != nil {
 			return err
 		}
-		bs, err = json.Marshal(map[string]interface{}{
+		sess, err := newSession(tk.Value, tk.XUserID)
+		if err != nil {
+			return err
+		}
+		bs, err := json.Marshal(map[string]interface{}{
 			"member-id": fmt.Sprint(sess.ID()),
 		})
 		if err != nil {
 			return err
 		}
-		body.Reset()
+		body := bytes.Buffer{}
 		_, err = body.Write(bs)
 		if err != nil {
 			return err
 		}
 
-		req, err = http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", &body)
+		req, err := http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", &body)
 		if err != nil {
 			return err
 		}
 		req.Header.Add("Authorization", "Bearer "+tk.Value)
 		jsonize(req)
-		resp, err = http.DefaultClient.Do(req)
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return err
 		}
@@ -136,16 +173,14 @@ func MakeOauthCallback(
 		}
 		return c.JSON(tok)
 	}
-}
+} // }}}
 
-type GetSession func(id uint64) (Session, error)
-
-func MakeRetrieveSession(gs GetSession) RetrieveSession {
+func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 	return func(c *fiber.Ctx) (sess Session, err error) {
 		auth := c.Request().Header.Peek("Authorization")
 		tok, err := jwt.Parse(
 			string(auth),
-			func(t *jwt.Token) (interface{}, error) { return nil, nil },
+			func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil },
 		)
 		if err != nil {
 			return
@@ -175,7 +210,7 @@ func MakeGetUserInfo(rs RetrieveSession) fiber.Handler {
 		if err != nil {
 			return err
 		}
-		req.Header.Add("Authorization", "Bearer "+sess.Token())
+		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
 		jsonize(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -186,25 +221,13 @@ func MakeGetUserInfo(rs RetrieveSession) fiber.Handler {
 		return err
 	}
 }
-func MakeNewSessionToken(key interface{}) NewSessionToken {
-	return func(sess Session) (t string, err error) {
-		tok := jwt.New(jwt.SigningMethodHS256)
-		c := tok.Claims.(jwt.MapClaims)
-		c["sub"] = sess.ID()
-		return tok.SignedString(key)
-	}
-}
-func MakeProxy(prefix string, getAuthToken GetAuthToken) fiber.Handler {
+func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		r := c.Request()
-		u := r.URI()
-		u.SetPath(strings.TrimPrefix(string(u.Path()), prefix))
-		ses := r.Header.Peek("Authorization")
-		tok, err := getAuthToken(string(ses))
+		sess, err := rs(c)
 		if err != nil {
 			return err
 		}
-		r.Header.Set("Authorization", tok)
+		c.Request().Header.Set("Authorization", sess.PolarToken())
 		if err := proxy.Do(c, polarflow); err != nil {
 			return err
 		}
