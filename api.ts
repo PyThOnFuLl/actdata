@@ -33,7 +33,7 @@ class AddMeasurement {
 }
 
 /**
- * get session info
+ * get session info (polar ID needed e.g. for /proxy/users/$id)
  *
  */
 @endpoint({
