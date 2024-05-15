@@ -76,8 +76,6 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	}
 }
 
-type GetAuthToken func(string) (string, error)
-
 func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ses, err := rs(c)
