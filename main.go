@@ -191,17 +191,12 @@ func MakeOauthCallback(
 		}
 		r, w := io.Pipe()
 		defer r.Close()
-		body := (map[string]interface{}{
-			"member-id": fmt.Sprint(sess.GetID()),
-		})
-		enc_err := make(chan error)
 		go func() {
 			defer w.Close()
-			if err := json.NewEncoder(w).Encode(body); err != nil {
-				enc_err <- err
-				return
-			}
-			enc_err <- nil
+			body := (map[string]interface{}{
+				"member-id": fmt.Sprint(sess.GetID()),
+			})
+			w.CloseWithError(json.NewEncoder(w).Encode(body))
 		}()
 		req, err := http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", r)
 		if err != nil {
@@ -211,9 +206,6 @@ func MakeOauthCallback(
 		jsonize(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return err
-		}
-		if err := <-enc_err; err != nil {
 			return err
 		}
 		defer resp.Body.Close()
