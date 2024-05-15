@@ -3,6 +3,7 @@ package main
 import (
 	"actdata/models"
 	"context"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -51,7 +52,7 @@ func MakeNewSessionToken(key interface{}) NewSessionToken {
 	return func(sess Session) (t string, err error) {
 		tok := jwt.New(jwt.SigningMethodHS256)
 		c := tok.Claims.(jwt.MapClaims)
-		c["sub"] = sess.ID()
+		c["sub"] = fmt.Sprint(sess.ID())
 		return tok.SignedString(key)
 	}
 }
