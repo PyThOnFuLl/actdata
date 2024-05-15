@@ -192,31 +192,7 @@ func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 		return gs(id)
 	}
 }
-func MakeGetUserInfo(rs RetrieveSession) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		sess, err := rs(c)
-		if err != nil {
-			return err
-		}
-		req, err := http.NewRequest(
-			http.MethodGet,
-			"https://www.polaraccesslink.com/v3/users/"+fmt.Sprint(sess.PolarID()),
-			nil,
-		)
-		if err != nil {
-			return err
-		}
-		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
-		jsonize(req)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		c.Status(resp.StatusCode)
-		_, err = io.Copy(c, resp.Body)
-		return err
-	}
-}
+
 func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		sess, err := rs(c)
