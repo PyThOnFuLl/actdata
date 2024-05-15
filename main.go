@@ -24,7 +24,6 @@ func main() {
 	fmt.Printf("%+v", f())
 }
 func f() error {
-	app := fiber.New()
 	ctx := context.Background()
 	db, err := sql.Open("sqlite", "./database.db")
 	if err != nil {
@@ -34,6 +33,8 @@ func f() error {
 	secret := []byte(os.Getenv("TOKEN_SECRET"))
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
+	// endpoints
+	app := fiber.New()
 	app.Get("/oauth2_callback", MakeOauthCallback(
 		MakeCode2Token(
 			os.Getenv("CLIENT_ID"),
