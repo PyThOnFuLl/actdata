@@ -179,7 +179,7 @@ func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 	return func(c *fiber.Ctx) (sess Session, err error) {
 		auth := c.Request().Header.Peek("Authorization")
 		tok, err := jwt.Parse(
-			string(auth),
+			strings.TrimSpace(strings.TrimPrefix(string(auth), "Bearer")),
 			func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil },
 		)
 		if err != nil {
