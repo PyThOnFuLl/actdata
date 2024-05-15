@@ -69,12 +69,15 @@ func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs Retrie
 	}
 }
 
+// response from polar token endpoint
 type AccessToken struct {
 	Value     string `json:"access_token"`
 	Type      string `json:"token_type"`
 	ExpiresIn uint   `json:"expires_in"`
 	XUserID   uint64 `json:"x_user_id"`
 }
+
+// обменять код с oauth на токен пользователя
 type Code2Token func(code string) (at AccessToken, err error)
 
 func MakeCode2Token(cli_id, cli_secret string) Code2Token {
@@ -91,6 +94,7 @@ func MakeCode2Token(cli_id, cli_secret string) Code2Token {
 		if err != nil {
 			return
 		}
+		// http form
 		vals := url.Values{}
 		vals.Add("grant_type", "authorization_code")
 		vals.Add("code", code)
