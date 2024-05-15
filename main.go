@@ -50,6 +50,32 @@ func f() error {
 	return app.Listen(":8000")
 }
 
+func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		sess, err := rs(c)
+		if err != nil {
+			return err
+		}
+		req, err := http.NewRequest(
+			http.MethodGet,
+			"https://www.polaraccesslink.com/v3"+strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
+			nil,
+		)
+		if err != nil {
+			return err
+		}
+		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
+		jsonize(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		c.Status(resp.StatusCode)
+		_, err = io.Copy(c, resp.Body)
+		return err
+	}
+}
+
 type GetAuthToken func(string) (string, error)
 
 func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
@@ -197,31 +223,5 @@ func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 			return
 		}
 		return gs(id)
-	}
-}
-
-func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		sess, err := rs(c)
-		if err != nil {
-			return err
-		}
-		req, err := http.NewRequest(
-			http.MethodGet,
-			"https://www.polaraccesslink.com/v3"+strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
-			nil,
-		)
-		if err != nil {
-			return err
-		}
-		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
-		jsonize(req)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		c.Status(resp.StatusCode)
-		_, err = io.Copy(c, resp.Body)
-		return err
 	}
 }
