@@ -1,12 +1,37 @@
 package main
 
 import (
+	openapi "actdata/apis"
 	"actdata/models"
 	"context"
 
 	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
+func MakeAddMeasurement(ctx context.Context, db boil.ContextExecutor) AddMeasurement {
+	return func(msrmt openapi.MeasurementView, sid uint64) error {
+		m := models.Measurement{
+			SessionID: int64(sid),
+			Timestamp: msrmt.Timestamp,
+			Heartbeat: float64(msrmt.Heartbeat),
+		}
+		return m.Insert(ctx, db, boil.Infer())
+	}
+}
+func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor) GetMeasurements {
+	return func(session_id uint64) (ms []openapi.MeasurementView, err error) {
+		ms_models, err := models.Measurements(qm.Where("session_id = ?", session_id)).All(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+		ms = make([]openapi.MeasurementView, len(ms_models))
+		for k, v := range ms_models {
+			ms[k] = *openapi.NewMeasurementView(v.Timestamp, float32(v.Heartbeat))
+		}
+		return
+	}
+}
 func MakeGetSession(ctx context.Context, db boil.ContextExecutor) GetSession {
 	return func(id uint64) (sess Session, err error) {
 		s, err := models.FindSession(ctx, db, int64(id))
@@ -30,6 +55,7 @@ func MakeNewSession(ctx context.Context, db boil.ContextExecutor) NewSession {
 	}
 }
 
+// Session impl from DB model
 type session models.Session
 
 func (this session) GetPolarID() uint64 {

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"actdata/models"
+	openapi "actdata/apis"
 	"bytes"
 	"context"
 	"database/sql"
@@ -16,8 +16,6 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 
 	"github.com/golang-jwt/jwt/v5"
 	_ "modernc.org/sqlite"
@@ -45,7 +43,8 @@ func f() error {
 		MakeNewSessionToken(secret),
 		MakeNewSession(ctx, db),
 	))
-	app.Get("/measurements", MakeGetMeasurements(ctx, db, retrieveS))
+	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
+	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
 	app.Use(prefix, MakeProxy(prefix, retrieveS))
 	return app.Listen(":8000")
 }
@@ -76,18 +75,34 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	}
 }
 
-func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
+type AddMeasurement func(msrmt openapi.MeasurementView, sid uint64) error
+
+func MakePostMeasurement(add AddMeasurement, rs RetrieveSession) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+
+		var in openapi.MeasurementView
+		if err := c.BodyParser(&in); err != nil {
+			return err
+		}
+		sess, err := rs(c)
+		if err != nil {
+			return err
+		}
+		if err := add(in, sess.GetID()); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+type GetMeasurements func(session_id uint64) ([]openapi.MeasurementView, error)
+
+func MakeGetMeasurementsHandler(gm GetMeasurements, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ses, err := rs(c)
+		ms, err := gm(ses.GetID())
 		if err != nil {
 			return err
-		}
-		ms, err := models.Measurements(qm.Where("session_id = ?", ses.GetID())).All(ctx, db)
-		if err != nil {
-			return err
-		}
-		if len(ms) == 0 {
-			return c.JSON([]struct{}{})
 		}
 		return c.JSON(ms)
 	}

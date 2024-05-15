@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@airtasker/spot": "^1.13.0",
+    "typescript": "^5.4.5"
+  }
+}
