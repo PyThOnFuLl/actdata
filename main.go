@@ -37,7 +37,6 @@ func f() error {
 	}
 	prefix := "/proxy"
 	oauth2_callback := "/oauth2_callback"
-	redirect_url := "http://localhost:8000" + oauth2_callback
 	secret := []byte(os.Getenv("TOKEN_SECRET"))
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
@@ -51,7 +50,6 @@ func f() error {
 	))
 	app.Get("/measurements", MakeGetMeasurements(ctx, db, retrieveS))
 	app.Use(prefix, MakeProxy(prefix, retrieveS))
-	fmt.Println(redirect_url)
 	return app.Listen(":8000")
 }
 
