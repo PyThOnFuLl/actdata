@@ -13,7 +13,7 @@ func MakeGetSession(ctx context.Context, db boil.ContextExecutor) GetSession {
 		if err != nil {
 			return
 		}
-		return session{token: s.AuthToken, id: uint64(s.SessionID), polarID: s.PolarID}, nil
+		return session(*s), nil
 	}
 }
 
@@ -26,10 +26,19 @@ func MakeNewSession(ctx context.Context, db boil.ContextExecutor) NewSession {
 		if err = m.Insert(ctx, db, boil.Infer()); err != nil {
 			return
 		}
-		return session{
-			id:      uint64(m.SessionID),
-			polarID: m.PolarID,
-			token:   m.AuthToken,
-		}, nil
+		return session(m), nil
 	}
+}
+
+type session models.Session
+
+func (this session) GetPolarID() uint64 {
+	return this.PolarID
+}
+
+func (this session) GetPolarToken() string {
+	return this.AuthToken
+}
+func (this session) GetID() uint64 {
+	return uint64(this.SessionID)
 }

@@ -64,7 +64,7 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 		if err != nil {
 			return err
 		}
-		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
+		req.Header.Add("Authorization", "Bearer "+sess.GetPolarToken())
 		jsonize(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -82,7 +82,7 @@ func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs Retrie
 		if err != nil {
 			return err
 		}
-		ms, err := models.Measurements(qm.Where("session_id = ?", ses.ID())).All(ctx, db)
+		ms, err := models.Measurements(qm.Where("session_id = ?", ses.GetID())).All(ctx, db)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func MakeOauthCallback(
 			return err
 		}
 		bs, err := json.Marshal(map[string]interface{}{
-			"member-id": fmt.Sprint(sess.ID()),
+			"member-id": fmt.Sprint(sess.GetID()),
 		})
 		if err != nil {
 			return err
