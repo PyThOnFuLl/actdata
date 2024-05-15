@@ -43,9 +43,21 @@ func f() error {
 		MakeNewSession(ctx, db),
 	))
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
+	app.Get("/info", MakeSessionInfo(retrieveS))
 	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
 	app.Use(prefix, MakeProxy(prefix, retrieveS))
 	return app.Listen(":8000")
+}
+
+// получить информацию о сессии
+func MakeSessionInfo(rs RetrieveSession) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		sess, err := rs(c)
+		if err != nil {
+			return err
+		}
+		return c.JSON(openapi.NewSessionView(int64(sess.GetPolarID())))
+	}
 }
 
 // обработчик запросов, проксирующий их на API AccessLink
