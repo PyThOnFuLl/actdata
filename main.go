@@ -36,11 +36,10 @@ func f() error {
 		return err
 	}
 	prefix := "/proxy"
-	oauth2_callback := "/oauth2_callback"
 	secret := []byte(os.Getenv("TOKEN_SECRET"))
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
-	app.Get(oauth2_callback, MakeOauthCallback(
+	app.Get("/oauth2_callback", MakeOauthCallback(
 		MakeCode2Token(
 			os.Getenv("CLIENT_ID"),
 			os.Getenv("CLIENT_SECRET"),
