@@ -1,4 +1,4 @@
-import { api, endpoint, headers, pathParams, request, response, body, Int64 } from "@airtasker/spot";
+import { api, endpoint, headers, pathParams, request, response, body, Int64, queryParams } from "@airtasker/spot";
 
 @api({
 	name: "actdata"
@@ -26,10 +26,25 @@ class ListMeasurements {
 	path: "/measurements/"
 })
 class AddMeasurement {
+	@request
 	request(
 		@body body: MeasurementView,
 	) { }
 	@response({ status: 200 }) successResponse() { }
+}
+
+/**
+ * start a new session or continue an old one with code from polar oauth
+ * and receive auth token
+ */
+@endpoint({
+	method: "GET",
+	path: "/oauth2_callback/"
+})
+class Oauth {
+	@request
+	request( @queryParams qp: {code: string}){}
+	@response({ status: 200 }) successResponse(@body body: string) { }
 }
 
 /**
@@ -41,7 +56,18 @@ class AddMeasurement {
 	path: "/info/"
 })
 class GetSessionInfo {
-	@response({ status: 200 }) successResponse(@body body: Array<SessionView>) { }
+	@response({ status: 200 }) successResponse(@body body: SessionView) { }
+}
+
+/**
+ * proxy to accesslink
+ * e.g. /proxy/users/123 -> https://www.polaraccesslink.com/v3/users/123
+ */
+@endpoint({
+	method: "HEAD",
+	path: "/proxy/"
+})
+class Proxy {
 }
 
 /**
