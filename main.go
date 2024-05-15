@@ -25,13 +25,6 @@ import (
 
 const polarflow = "https://flow.polar.com"
 
-type AccessToken struct {
-	Value     string `json:"access_token"`
-	Type      string `json:"token_type"`
-	ExpiresIn uint   `json:"expires_in"`
-	XUserID   uint64 `json:"x_user_id"`
-}
-
 func main() {
 	fmt.Printf("%+v", f())
 }
@@ -78,6 +71,12 @@ func MakeMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveS
 	}
 }
 
+type AccessToken struct {
+	Value     string `json:"access_token"`
+	Type      string `json:"token_type"`
+	ExpiresIn uint   `json:"expires_in"`
+	XUserID   uint64 `json:"x_user_id"`
+}
 type Code2Token func(code string) (at AccessToken, err error)
 
 func MakeCode2Token(cli_id, cli_secret string) Code2Token {
