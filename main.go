@@ -234,8 +234,6 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 			return err
 		}
 		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
-		fmt.Printf("req.Header: %+v\n", req.Header)
-		fmt.Printf("req.URL.String(): %v\n", req.URL.String())
 		jsonize(req)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
