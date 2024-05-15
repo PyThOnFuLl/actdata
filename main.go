@@ -145,17 +145,13 @@ func MakeCode2Token(cli_id, cli_secret string) Code2Token {
 		if err != nil {
 			return
 		}
-		fmt.Printf("cli_id: %v\n", cli_id)
-		fmt.Printf("cli_secret: %v\n", cli_secret)
 		auth := base64.StdEncoding.EncodeToString([]byte(cli_id + ":" + cli_secret))
-		fmt.Printf("auth: %v\n", auth)
 		req.Header.Set(
 			"Authorization",
 			"Basic "+auth,
 		)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		resp, err := http.DefaultClient.Do(req)
-		fmt.Printf("resp.StatusCode: %v\n", resp.StatusCode)
 		err = json.NewDecoder(resp.Body).Decode(&at)
 		return
 	}
