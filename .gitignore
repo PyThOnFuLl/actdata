@@ -2,3 +2,7 @@ bin/
 models/
 apis/
 node_modules/
+api.json
+database.db
+.database.db
+.envrc
