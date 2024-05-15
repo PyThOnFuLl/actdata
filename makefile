@@ -20,3 +20,7 @@ api.json: api.ts node_modules
 
 node_modules: package.json
 	npm i
+
+actdata.zip: *.go models apis
+	git archive -o $@ HEAD
+	zip -ru $@ apis models
