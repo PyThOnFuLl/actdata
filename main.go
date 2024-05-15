@@ -19,7 +19,6 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 
-	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/golang-jwt/jwt/v5"
 	_ "modernc.org/sqlite"
 )
@@ -227,10 +226,24 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 		if err != nil {
 			return err
 		}
-		c.Request().Header.Set("Authorization", sess.PolarToken())
-		if err := proxy.Do(c, polarflow); err != nil {
+		req, err := http.NewRequest(
+			http.MethodGet,
+			"https://www.polaraccesslink.com/v3"+strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
+			nil,
+		)
+		if err != nil {
 			return err
 		}
-		return nil
+		req.Header.Add("Authorization", "Bearer "+sess.PolarToken())
+		fmt.Printf("req.Header: %+v\n", req.Header)
+		fmt.Printf("req.URL.String(): %v\n", req.URL.String())
+		jsonize(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		c.Status(resp.StatusCode)
+		_, err = io.Copy(c, resp.Body)
+		return err
 	}
 }
