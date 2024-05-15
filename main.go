@@ -2,7 +2,6 @@ package main
 
 import (
 	openapi "actdata/apis"
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -136,18 +135,6 @@ type Code2Token func(code string) (at AccessToken, err error)
 
 func MakeCode2Token(cli_id, cli_secret string) Code2Token {
 	return func(code string) (at AccessToken, err error) {
-		var bodybuf bytes.Buffer
-		bs, err := json.Marshal(map[string]interface{}{
-			"grant_type": "authorization_code",
-			"code":       code,
-		})
-		if err != nil {
-			return
-		}
-		_, err = bodybuf.Write(bs)
-		if err != nil {
-			return
-		}
 		// http form
 		vals := url.Values{}
 		vals.Add("grant_type", "authorization_code")
