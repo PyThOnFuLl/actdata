@@ -1,0 +1,34 @@
+[sqlite3]
+dbname = ".database.db"
+
+[psql]
+dbname = "zero"
+user = "zero"
+pass = "2345"
+host = "localhost"
+sslmode = "disable"
+
+# [[types]]
+
+# 	[types.match]
+# 	name = "session_id"
+
+# 	[types.replace]
+# 	type = "uint64"
+
+[[types]]
+
+	[types.match]
+	name = "polar_id"
+
+	[types.replace]
+	type = "uint64"
+
+[[types]]
+
+	[types.match]
+	type = "int"
+
+	[types.replace]
+	type = "int64"
+
