@@ -67,6 +67,9 @@ func MakeMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveS
 		if err != nil {
 			return err
 		}
+		if len(ms) == 0 {
+			return c.JSON([]struct{}{})
+		}
 		return c.JSON(ms)
 	}
 }
