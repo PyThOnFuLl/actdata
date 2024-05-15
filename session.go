@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 )
@@ -15,7 +14,7 @@ type Session interface {
 	ID() uint64
 	PolarID() uint64
 }
-type RetrieveSession func(c *fiber.Ctx) (sess Session, err error)
+
 type GetSession func(id uint64) (Session, error)
 
 type NewSession func(tok string, polar_id uint64) (sess Session, err error)

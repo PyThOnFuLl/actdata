@@ -171,6 +171,9 @@ func MakeOauthCallback(
 	}
 } // }}}
 
+// получить Session из контекста запроса
+type RetrieveSession func(c *fiber.Ctx) (sess Session, err error)
+
 func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 	return func(c *fiber.Ctx) (sess Session, err error) {
 		auth := c.Request().Header.Peek("Authorization")
