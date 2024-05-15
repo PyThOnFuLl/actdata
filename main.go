@@ -48,6 +48,7 @@ func f() error {
 	return app.Listen(":8000")
 }
 
+// обработчик запросов, проксирующий их на API AccessLink
 func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		sess, err := rs(c)
@@ -74,6 +75,7 @@ func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
 	}
 }
 
+// добавить новое измерение ЧСС текущей сессии
 type AddMeasurement func(msrmt openapi.MeasurementView, sid uint64) error
 
 func MakePostMeasurement(add AddMeasurement, rs RetrieveSession) fiber.Handler {
@@ -94,6 +96,7 @@ func MakePostMeasurement(add AddMeasurement, rs RetrieveSession) fiber.Handler {
 	}
 }
 
+// получить все измерения ЧСС текущей сессии
 type GetMeasurements func(session_id uint64) ([]openapi.MeasurementView, error)
 
 func MakeGetMeasurementsHandler(gm GetMeasurements, rs RetrieveSession) fiber.Handler {
@@ -209,7 +212,7 @@ func MakeOauthCallback(
 	}
 } // }}}
 
-// получить Session из контекста запроса
+// получить объект Session из контекста запроса
 type RetrieveSession func(c *fiber.Ctx) (sess Session, err error)
 
 func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
