@@ -4,7 +4,10 @@ import (
 	openapi "actdata/apis"
 	"actdata/models"
 	"context"
+	"database/sql"
+	"errors"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
@@ -36,6 +39,18 @@ func MakeGetSession(ctx context.Context, db boil.ContextExecutor) GetSession {
 	return func(id uint64) (sess Session, err error) {
 		s, err := models.FindSession(ctx, db, int64(id))
 		if err != nil {
+			return
+		}
+		return session(*s), nil
+	}
+}
+func MakeGetSessionFromPolar(ctx context.Context, db boil.ContextExecutor) GetSessionFromPolar {
+	return func(polar_id uint64) (sess Session, err error) {
+		s, err := models.Sessions(qm.Where("polar_id = ?", polar_id)).One(ctx, db)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				err = errors.Join(err, fiber.ErrNotFound)
+			}
 			return
 		}
 		return session(*s), nil

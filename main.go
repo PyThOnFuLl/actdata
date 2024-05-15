@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,6 +41,8 @@ func f() error {
 			os.Getenv("CLIENT_SECRET"),
 		),
 		MakeNewSessionToken(secret),
+		MakeRegisterUser(),
+		MakeGetSessionFromPolar(ctx, db),
 		MakeNewSession(ctx, db),
 	))
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
@@ -158,9 +161,48 @@ func MakeCode2Token(cli_id, cli_secret string) Code2Token {
 		return
 	}
 }
+
+// perform registration of user to polar client
+type RegisterUser func(sid uint64, token string) error
+
+func MakeRegisterUser() RegisterUser {
+	return func(sid uint64, token string) error {
+		r, w := io.Pipe()
+		defer r.Close()
+		go func() {
+			defer w.Close()
+			body := (map[string]interface{}{
+				"member-id": fmt.Sprint(sid),
+			})
+			w.CloseWithError(json.NewEncoder(w).Encode(body))
+		}()
+		req, err := http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", r)
+		if err != nil {
+			return err
+		}
+		req.Header.Add("Authorization", "Bearer "+token)
+		jsonize(req)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if (resp.StatusCode < 200 || resp.StatusCode >= 300) &&
+			resp.StatusCode != http.StatusConflict {
+			errstr, err := io.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Printf("err reading body: %+v\n", err)
+			}
+			return fiber.NewError(resp.StatusCode, string(errstr))
+		}
+		return nil
+	}
+}
 func MakeOauthCallback(
 	c2t Code2Token,
 	mkTok NewSessionToken,
+	reg RegisterUser,
+	tryFindSession GetSessionFromPolar,
 	newSession NewSession,
 ) fiber.Handler { // {{{
 	return func(c *fiber.Ctx) error {
@@ -172,34 +214,21 @@ func MakeOauthCallback(
 		if err != nil {
 			return err
 		}
-		sess, err := newSession(tk.Value, tk.XUserID)
+		sess, err := tryFindSession(tk.XUserID)
 		if err != nil {
-			return err
-		}
-		r, w := io.Pipe()
-		defer r.Close()
-		go func() {
-			defer w.Close()
-			body := (map[string]interface{}{
-				"member-id": fmt.Sprint(sess.GetID()),
-			})
-			w.CloseWithError(json.NewEncoder(w).Encode(body))
-		}()
-		req, err := http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", r)
-		if err != nil {
-			return err
-		}
-		req.Header.Add("Authorization", "Bearer "+tk.Value)
-		jsonize(req)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if (resp.StatusCode < 200 || resp.StatusCode >= 300) &&
-			resp.StatusCode != http.StatusConflict {
-			c.Status(resp.StatusCode)
-			return nil
+			// if session doesn't exist yet
+			if errors.Is(err, fiber.ErrNotFound) {
+				// start new session
+				sess, err = newSession(tk.Value, tk.XUserID)
+				if err != nil {
+					return err
+				}
+				if err := reg(sess.GetID(), tk.Value); err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
 		tok, err := mkTok(sess)
 		if err != nil {
