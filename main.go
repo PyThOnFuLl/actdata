@@ -49,7 +49,7 @@ func f() error {
 		MakeNewSessionToken(secret),
 		MakeNewSession(ctx, db),
 	))
-	app.Get("/measurements", MakeMeasurements(ctx, db, retrieveS))
+	app.Get("/measurements", MakeGetMeasurements(ctx, db, retrieveS))
 	app.Use(prefix, MakeProxy(prefix, retrieveS))
 	fmt.Println(redirect_url)
 	return app.Listen(":8000")
@@ -57,7 +57,7 @@ func f() error {
 
 type GetAuthToken func(string) (string, error)
 
-func MakeMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
+func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor, rs RetrieveSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ses, err := rs(c)
 		if err != nil {
