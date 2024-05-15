@@ -23,8 +23,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const polarflow = "https://flow.polar.com"
-
 func main() {
 	fmt.Printf("%+v", f())
 }
