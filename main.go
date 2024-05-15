@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -227,7 +226,7 @@ func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 		if err != nil {
 			return
 		}
-		id, err := strconv.ParseUint(sub, 10, 64)
+		id, err := parseUint(sub)
 		if err != nil {
 			return
 		}
