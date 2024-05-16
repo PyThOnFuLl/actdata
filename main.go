@@ -2,6 +2,7 @@ package main
 
 import (
 	openapi "actdata/apis"
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/valyala/fasthttp"
 
 	"github.com/golang-jwt/jwt/v5"
 	_ "modernc.org/sqlite"
@@ -33,6 +35,7 @@ func f() error {
 	secret := []byte(os.Getenv("TOKEN_SECRET"))
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
+	proxy := MakeProxy()
 	// endpoints
 	app := fiber.New()
 	app.Get("/oauth2_callback", MakeOauthCallback(
@@ -41,14 +44,14 @@ func f() error {
 			os.Getenv("CLIENT_SECRET"),
 		),
 		MakeNewSessionToken(secret),
-		MakeRegisterUser(),
+		MakeRegisterUser(proxy),
 		MakeGetSessionFromPolar(ctx, db),
 		MakeNewSession(ctx, db),
 	))
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
 	app.Get("/info", MakeSessionInfo(retrieveS))
 	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
-	app.Use(prefix, MakeProxy(prefix, retrieveS))
+	app.Use(prefix, MakeProxyHandler(prefix, retrieveS, proxy))
 	return app.Listen(":8000")
 }
 
@@ -63,29 +66,68 @@ func MakeSessionInfo(rs RetrieveSession) fiber.Handler {
 	}
 }
 
+type Proxy func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error)
+
+func MakeFasthttpProxy() Proxy {
+	return func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error) {
+		c := fasthttp.Client{}
+		req := fasthttp.AcquireRequest()
+		defer fasthttp.ReleaseRequest(req)
+		req.SetBodyStream(respbody, -1)
+		for k, v := range header {
+			for _, h := range v {
+				req.Header.Add(k, h)
+			}
+		}
+		req.Header.SetMethod(method)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.SetRequestURI("https://www.polaraccesslink.com/v3" + endpoint)
+		resp := fasthttp.AcquireResponse()
+		if err = c.Do(req, resp); err != nil {
+			return
+		}
+		return resp.StatusCode(), io.NopCloser(bytes.NewBuffer(resp.Body())), nil
+	}
+}
+func MakeProxy() Proxy {
+	return func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error) {
+		req, err := http.NewRequest(method, "https://www.polaraccesslink.com/v3"+endpoint, reqbody)
+		if err != nil {
+			return
+		}
+		req.Header = header
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := http.DefaultClient.Do(req)
+		return resp.StatusCode, resp.Body, err
+	}
+}
+
 // обработчик запросов, проксирующий их на API AccessLink
-func MakeProxy(prefix string, rs RetrieveSession) fiber.Handler {
+func MakeProxyHandler(prefix string, rs RetrieveSession, proxy Proxy) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		sess, err := rs(c)
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequest(
-			http.MethodGet,
-			"https://www.polaraccesslink.com/v3"+strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
-			nil,
+		h := &c.Request().Header
+		proxy_headers := make(http.Header, h.Len())
+		h.VisitAll(func(key, value []byte) {
+			proxy_headers.Add(string(key), string(value))
+
+		})
+		status, body, err := proxy(
+			sess.GetPolarToken(),
+			strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
+			c.Method(),
+			c.Request().BodyStream(),
+			proxy_headers,
 		)
+		defer body.Close()
 		if err != nil {
 			return err
 		}
-		req.Header.Add("Authorization", "Bearer "+sess.GetPolarToken())
-		jsonize(req)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		c.Status(resp.StatusCode)
-		_, err = io.Copy(c, resp.Body)
+		c.Status(status)
+		_, err = io.Copy(c, body)
 		return err
 	}
 }
@@ -165,7 +207,7 @@ func MakeCode2Token(cli_id, cli_secret string) Code2Token {
 // perform registration of user to polar client
 type RegisterUser func(sid uint64, token string) error
 
-func MakeRegisterUser() RegisterUser {
+func MakeRegisterUser(proxy Proxy) RegisterUser {
 	return func(sid uint64, token string) error {
 		r, w := io.Pipe()
 		defer r.Close()
@@ -176,24 +218,25 @@ func MakeRegisterUser() RegisterUser {
 			})
 			w.CloseWithError(json.NewEncoder(w).Encode(body))
 		}()
-		req, err := http.NewRequest(http.MethodPost, "https://www.polaraccesslink.com/v3/users", r)
+		json_header := []string{"application/json"}
+		status, body, err := proxy(
+			token,
+			"/users",
+			http.MethodPost,
+			r,
+			http.Header{"Content-Type": json_header, "Accept": json_header},
+		)
 		if err != nil {
 			return err
 		}
-		req.Header.Add("Authorization", "Bearer "+token)
-		jsonize(req)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if (resp.StatusCode < 200 || resp.StatusCode >= 300) &&
-			resp.StatusCode != http.StatusConflict {
-			errstr, err := io.ReadAll(resp.Body)
+		defer body.Close()
+		if (status < 200 || status >= 300) &&
+			status != http.StatusConflict {
+			errstr, err := io.ReadAll(body)
 			if err != nil {
 				fmt.Printf("err reading body: %+v\n", err)
 			}
-			return fiber.NewError(resp.StatusCode, string(errstr))
+			return fiber.NewError(status, string(errstr))
 		}
 		return nil
 	}
