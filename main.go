@@ -30,21 +30,22 @@ func f() error {
 	if err != nil {
 		return err
 	}
-	cli_id, err := lookupEnv("CLIENT_ID")
+	var cli_id, cli_secret, secret_str string
+	for key, out := range map[string]*string{
+		"CLIENT_ID":     &cli_id,
+		"CLIENT_SECRET": &cli_secret,
+		"TOKEN_SECRET":  &secret_str,
+	} {
+		v, env_err := lookupEnv(key)
+		err = errors.Join(err, env_err)
+		*out = v
+	}
 	if err != nil {
 		return err
 	}
 
-	cli_secret, err := lookupEnv("CLIENT_SECRET")
-	if err != nil {
-		return err
-	}
 	proxy_prefix := "/proxy"
 	fh_prefix := "/fasthttp"
-	secret_str, err := lookupEnv("TOKEN_SECRET")
-	if err != nil {
-		return err
-	}
 	secret := []byte(secret_str)
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
