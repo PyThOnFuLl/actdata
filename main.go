@@ -373,6 +373,7 @@ func MakeRetrieveSession(gs GetSession, secret []byte) RetrieveSession {
 			func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil },
 		)
 		if err != nil {
+			err = errors.Join(err, fiber.ErrBadRequest)
 			return
 		}
 		sub, err := tok.Claims.GetSubject()
