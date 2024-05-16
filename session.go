@@ -16,6 +16,7 @@ type NewSession func(tok string, polar_id uint64) (sess Session, err error)
 type GetSession func(id uint64) (Session, error)
 type GetSessionFromPolar func(polar_id uint64) (Session, error)
 type NewSessionToken func(sess Session) (t string, err error)
+type SetSessionToken func(sess Session, tok string) error
 
 func MakeNewSessionToken(key interface{}) NewSessionToken {
 	return func(sess Session) (t string, err error) {

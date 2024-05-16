@@ -69,6 +69,18 @@ func MakeNewSession(ctx context.Context, db boil.ContextExecutor) NewSession {
 		return session(m), nil
 	}
 }
+func MakeSetSessionToken(ctx context.Context, db boil.ContextExecutor) SetSessionToken {
+	return func(sess Session, tok string) error {
+		m := models.Session{AuthToken: tok, SessionID: int64(sess.GetID())}
+		_, err := m.Update(
+			ctx,
+			db,
+			boil.Whitelist(models.SessionColumns.AuthToken),
+		)
+		return err
+
+	}
+}
 
 // Session impl from DB model
 type session models.Session

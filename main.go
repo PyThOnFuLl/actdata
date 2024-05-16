@@ -46,6 +46,7 @@ func f() error {
 			os.Getenv("CLIENT_SECRET"),
 		),
 		MakeNewSessionToken(secret),
+		MakeSetSessionToken(ctx, db),
 		MakeRegisterUser(proxy),
 		MakeGetSessionFromPolar(ctx, db),
 		MakeNewSession(ctx, db),
@@ -245,6 +246,7 @@ func MakeRegisterUser(proxy Proxy) RegisterUser {
 func MakeOauthCallback(
 	c2t Code2Token,
 	mkTok NewSessionToken,
+	setTok SetSessionToken,
 	reg RegisterUser,
 	tryFindSession GetSessionFromPolar,
 	newSession NewSession,
@@ -267,13 +269,18 @@ func MakeOauthCallback(
 				if err != nil {
 					return err
 				}
-				if err := reg(sess.GetID(), tk.Value); err != nil {
-					return err
-				}
 			} else {
 				return err
 			}
+		} else {
+			if err := setTok(sess, tk.Value); err != nil {
+				return err
+			}
 		}
+		if err := reg(sess.GetID(), tk.Value); err != nil {
+			return err
+		}
+
 		tok, err := mkTok(sess)
 		if err != nil {
 			return err
