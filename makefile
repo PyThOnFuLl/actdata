@@ -1,7 +1,8 @@
 all: bin/actdata
 
 models: .database.db
-	sqlboiler sqlite3
+	rm -rf $@
+	sqlboiler --no-hooks sqlite3
 
 .database.db: dbschema.sqlite.sql
 	rm $@
@@ -12,6 +13,7 @@ bin/%: *.go models apis
 	go build -o $@
 
 apis: api.json
+	rm -rf $@
 	npx -y @openapitools/openapi-generator-cli generate -i api.json -g go -o apis
 	rm -rf ./apis/test ./apis/go.*
 
