@@ -4,7 +4,9 @@ CREATE TABLE sessions (
 	auth_token TEXT NOT NULL
 );
 CREATE TABLE measurements (
-	session_id INTEGER NOT NULL REFERENCES sessions(session_id),
+	session_id INTEGER NOT NULL
+		REFERENCES sessions(session_id)
+		ON DELETE CASCADE,
 	timestamp INTEGER NOT NULL,
 	heartbeat REAL NOT NULL,
 	PRIMARY KEY(session_id, timestamp)

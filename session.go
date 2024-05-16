@@ -14,6 +14,7 @@ type Session interface {
 
 type NewSession func(tok string, polar_id uint64) (sess Session, err error)
 type GetSession func(id uint64) (Session, error)
+type DeleteSession func(id uint64) error
 type GetSessionFromPolar func(polar_id uint64) (Session, error)
 type NewSessionToken func(sess Session) (t string, err error)
 type SetSessionToken func(sess Session, tok string) error

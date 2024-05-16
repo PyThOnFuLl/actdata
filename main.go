@@ -26,7 +26,7 @@ func main() {
 }
 func f() error {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "./database.db")
+	db, err := sql.Open("sqlite", "./database.db?_pragma=foreign_keys(1)")
 	if err != nil {
 		return err
 	}
@@ -64,12 +64,72 @@ func f() error {
 		MakeGetSessionFromPolar(ctx, db),
 		MakeNewSession(ctx, db),
 	))
+	app.Delete("/sessions/:id", MakeDeleteSessionHandler(MakeAsAdmin(secret), MakeDeleteSession(ctx, db)))
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
 	app.Get("/info", MakeSessionInfo(retrieveS))
 	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
 	app.Use(proxy_prefix, MakeProxyHandler(proxy_prefix, retrieveS, proxy))
 	app.Use(fh_prefix, MakeProxyHandler(fh_prefix, retrieveS, fh_proxy))
+	admin, err := MakeNewAdminToken(secret)()
+	if err != nil {
+		return err
+	}
+	fmt.Println(admin)
 	return app.Listen(":8000")
+}
+
+type NewAdminToken func() (t string, err error)
+
+func MakeNewAdminToken(key interface{}) NewAdminToken {
+	return func() (t string, err error) {
+		tok := jwt.New(jwt.SigningMethodHS256)
+		c := tok.Claims.(jwt.MapClaims)
+		c["admin"] = true
+		return tok.SignedString(key)
+	}
+}
+
+type AsAdmin func(c *fiber.Ctx) error
+
+func MakeAsAdmin(secret []byte) AsAdmin {
+	return func(c *fiber.Ctx) error {
+		auth := c.Request().Header.Peek("Authorization")
+		tok, err := jwt.Parse(
+			strings.TrimSpace(strings.TrimPrefix(string(auth), "Bearer")),
+			func(t *jwt.Token) (interface{}, error) { return []byte(secret), nil },
+		)
+		if err != nil {
+			return errors.Join(err, fiber.ErrBadRequest)
+		}
+		cls := tok.Claims.(jwt.MapClaims)
+		admin, ok := cls["admin"].(bool)
+		if !ok {
+			println(1)
+			return fiber.ErrBadRequest
+		}
+		if !admin {
+			return fiber.ErrForbidden
+		}
+		return nil
+	}
+
+}
+
+func MakeDeleteSessionHandler(asAdmin AsAdmin, del DeleteSession) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if err := asAdmin(c); err != nil {
+			return err
+		}
+		ids, ok := c.AllParams()["id"]
+		if !ok {
+			return errors.Join(fmt.Errorf("route parameter %q not found", "id"), fiber.ErrBadRequest)
+		}
+		id, err := parseUint(ids)
+		if err != nil {
+			return errors.Join(err, fiber.ErrBadRequest)
+		}
+		return del(id)
+	}
 }
 
 // получить информацию о сессии

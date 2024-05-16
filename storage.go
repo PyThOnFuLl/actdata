@@ -85,6 +85,18 @@ func MakeSetSessionToken(ctx context.Context, db boil.ContextExecutor) SetSessio
 	}
 }
 
+func MakeDeleteSession(ctx context.Context, db boil.ContextExecutor) DeleteSession {
+	return func(id uint64) error {
+		c, err := models.
+			Sessions(models.SessionWhere.SessionID.EQ(int64(id))).
+			DeleteAll(ctx, db)
+		if c == 0 {
+			err = errors.Join(err, fiber.ErrNotFound)
+		}
+		return err
+	}
+}
+
 // Session impl from DB model
 type session models.Session
 
