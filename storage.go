@@ -9,7 +9,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/volatiletech/sqlboiler/v4/boil"
-	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
 func MakeAddMeasurement(ctx context.Context, db boil.ContextExecutor) AddMeasurement {
@@ -24,7 +23,9 @@ func MakeAddMeasurement(ctx context.Context, db boil.ContextExecutor) AddMeasure
 }
 func MakeGetMeasurements(ctx context.Context, db boil.ContextExecutor) GetMeasurements {
 	return func(session_id uint64) (ms []openapi.MeasurementView, err error) {
-		ms_models, err := models.Measurements(qm.Where("session_id = ?", session_id)).All(ctx, db)
+		ms_models, err := models.Measurements(
+			models.MeasurementWhere.SessionID.EQ(int64(session_id)),
+		).All(ctx, db)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +47,9 @@ func MakeGetSession(ctx context.Context, db boil.ContextExecutor) GetSession {
 }
 func MakeGetSessionFromPolar(ctx context.Context, db boil.ContextExecutor) GetSessionFromPolar {
 	return func(polar_id uint64) (sess Session, err error) {
-		s, err := models.Sessions(qm.Where("polar_id = ?", polar_id)).One(ctx, db)
+		s, err := models.Sessions(
+			models.SessionWhere.SessionID.EQ(int64(polar_id)),
+		).One(ctx, db)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				err = errors.Join(err, fiber.ErrNotFound)
