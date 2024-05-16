@@ -64,7 +64,12 @@ func f() error {
 		MakeGetSessionFromPolar(ctx, db),
 		MakeNewSession(ctx, db),
 	))
-	app.Delete("/sessions/:id", MakeDeleteSessionHandler(MakeAsAdmin(secret), MakeDeleteSession(ctx, db)))
+	app.Delete("/sessions/:id", MakeDeleteSessionHandler(
+		MakeAsAdmin(secret),
+		MakeDeleteSession(ctx, db),
+		MakeDeregisterUser(proxy),
+		getS,
+	))
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
 	app.Get("/info", MakeSessionInfo(retrieveS))
 	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
@@ -76,6 +81,33 @@ func f() error {
 	}
 	fmt.Println(admin)
 	return app.Listen(":8000")
+}
+
+type DeregisterUser func(polar_id uint64, token string) error
+
+func MakeDeregisterUser(proxy Proxy) DeregisterUser {
+	return func(polar_id uint64, token string) error {
+		status, body, err := proxy(
+			token,
+			fmt.Sprintf("/users/%d", polar_id),
+			http.MethodDelete,
+			nil,
+			&fasthttp.RequestHeader{},
+		)
+		if err != nil {
+			return err
+		}
+		defer body.Close()
+		if (status < 200 || status >= 300) &&
+			status != http.StatusConflict {
+			errstr, err := io.ReadAll(body)
+			if err != nil {
+				fmt.Printf("err reading body: %+v\n", err)
+			}
+			return fiber.NewError(status, string(errstr))
+		}
+		return nil
+	}
 }
 
 type NewAdminToken func() (t string, err error)
@@ -115,7 +147,7 @@ func MakeAsAdmin(secret []byte) AsAdmin {
 
 }
 
-func MakeDeleteSessionHandler(asAdmin AsAdmin, del DeleteSession) fiber.Handler {
+func MakeDeleteSessionHandler(asAdmin AsAdmin, del DeleteSession, dereg DeregisterUser, getS GetSession) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if err := asAdmin(c); err != nil {
 			return err
@@ -128,6 +160,13 @@ func MakeDeleteSessionHandler(asAdmin AsAdmin, del DeleteSession) fiber.Handler 
 		if err != nil {
 			return errors.Join(err, fiber.ErrBadRequest)
 		}
+		sess, err := getS(id)
+		if err != nil {
+			return err
+		}
+		dereg(id,
+			sess.GetPolarToken(),
+		)
 		return del(id)
 	}
 }
