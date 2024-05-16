@@ -66,7 +66,7 @@ func MakeSessionInfo(rs RetrieveSession) fiber.Handler {
 		if err != nil {
 			return err
 		}
-		return c.JSON(openapi.NewSessionView(int64(sess.GetPolarID())))
+		return c.JSON(openapi.NewSessionView(int64(sess.GetPolarID()), int64(sess.GetID())))
 	}
 }
 

@@ -80,5 +80,6 @@ type MeasurementView = {
 	heartbeat: number
 }
 type SessionView = {
-	polar_id: Int64
+	polar_id: Int64,
+	session_id: Int64
 }
