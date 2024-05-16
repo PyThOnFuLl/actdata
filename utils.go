@@ -1,11 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
-
-	"github.com/joomcode/errorx"
 )
 
 func jsonize(req *http.Request) {
@@ -15,7 +14,7 @@ func jsonize(req *http.Request) {
 func lookupEnv(k string) (string, error) {
 	v, ok := os.LookupEnv(k)
 	if !ok {
-		return v, errorx.InitializationFailed.New("%s environment variable is not defined", k)
+		return v, fmt.Errorf("%s environment variable is not defined", k)
 	}
 	return v, nil
 }
