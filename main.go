@@ -31,11 +31,13 @@ func f() error {
 	if err != nil {
 		return err
 	}
-	prefix := "/proxy"
+	proxy_prefix := "/proxy"
+	fh_prefix := "/fasthttp"
 	secret := []byte(os.Getenv("TOKEN_SECRET"))
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
 	proxy := MakeProxy()
+	fh_proxy := MakeFasthttpProxy(&fasthttp.Client{})
 	// endpoints
 	app := fiber.New()
 	app.Get("/oauth2_callback", MakeOauthCallback(
@@ -51,7 +53,8 @@ func f() error {
 	app.Get("/measurements", MakeGetMeasurementsHandler(MakeGetMeasurements(ctx, db), retrieveS))
 	app.Get("/info", MakeSessionInfo(retrieveS))
 	app.Post("/measurements", MakePostMeasurement(MakeAddMeasurement(ctx, db), retrieveS))
-	app.Use(prefix, MakeProxyHandler(prefix, retrieveS, proxy))
+	app.Use(proxy_prefix, MakeProxyHandler(proxy_prefix, retrieveS, proxy))
+	app.Use(fh_prefix, MakeProxyHandler(fh_prefix, retrieveS, fh_proxy))
 	return app.Listen(":8000")
 }
 
@@ -66,19 +69,14 @@ func MakeSessionInfo(rs RetrieveSession) fiber.Handler {
 	}
 }
 
-type Proxy func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error)
+type Proxy func(token, endpoint, method string, reqbody io.Reader, header *fasthttp.RequestHeader) (status int, respbody io.ReadCloser, err error)
 
-func MakeFasthttpProxy() Proxy {
-	return func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error) {
-		c := fasthttp.Client{}
+func MakeFasthttpProxy(c *fasthttp.Client) Proxy {
+	return func(token, endpoint, method string, reqbody io.Reader, header *fasthttp.RequestHeader) (status int, respbody io.ReadCloser, err error) {
 		req := fasthttp.AcquireRequest()
 		defer fasthttp.ReleaseRequest(req)
 		req.SetBodyStream(respbody, -1)
-		for k, v := range header {
-			for _, h := range v {
-				req.Header.Add(k, h)
-			}
-		}
+		header.CopyTo(&req.Header)
 		req.Header.SetMethod(method)
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.SetRequestURI("https://www.polaraccesslink.com/v3" + endpoint)
@@ -90,12 +88,17 @@ func MakeFasthttpProxy() Proxy {
 	}
 }
 func MakeProxy() Proxy {
-	return func(token, endpoint, method string, reqbody io.Reader, header http.Header) (status int, respbody io.ReadCloser, err error) {
+	return func(token, endpoint, method string, reqbody io.Reader, h *fasthttp.RequestHeader) (status int, respbody io.ReadCloser, err error) {
+		proxy_headers := make(http.Header, h.Len())
+		h.VisitAll(func(key, value []byte) {
+			proxy_headers.Add(string(key), string(value))
+
+		})
 		req, err := http.NewRequest(method, "https://www.polaraccesslink.com/v3"+endpoint, reqbody)
 		if err != nil {
 			return
 		}
-		req.Header = header
+		req.Header = proxy_headers
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp, err := http.DefaultClient.Do(req)
 		return resp.StatusCode, resp.Body, err
@@ -109,18 +112,12 @@ func MakeProxyHandler(prefix string, rs RetrieveSession, proxy Proxy) fiber.Hand
 		if err != nil {
 			return err
 		}
-		h := &c.Request().Header
-		proxy_headers := make(http.Header, h.Len())
-		h.VisitAll(func(key, value []byte) {
-			proxy_headers.Add(string(key), string(value))
-
-		})
 		status, body, err := proxy(
 			sess.GetPolarToken(),
 			strings.TrimPrefix(string(c.Request().URI().Path()), prefix),
 			c.Method(),
 			c.Request().BodyStream(),
-			proxy_headers,
+			&c.Request().Header,
 		)
 		defer body.Close()
 		if err != nil {
@@ -218,13 +215,17 @@ func MakeRegisterUser(proxy Proxy) RegisterUser {
 			})
 			w.CloseWithError(json.NewEncoder(w).Encode(body))
 		}()
-		json_header := []string{"application/json"}
+		headers := fasthttp.RequestHeader{}
+		func(json_header string) {
+			headers.Add("content-type", json_header)
+			headers.Add("accept", json_header)
+		}("application/json")
 		status, body, err := proxy(
 			token,
 			"/users",
 			http.MethodPost,
 			r,
-			http.Header{"Content-Type": json_header, "Accept": json_header},
+			&headers,
 		)
 		if err != nil {
 			return err
