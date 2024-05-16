@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -31,9 +30,22 @@ func f() error {
 	if err != nil {
 		return err
 	}
+	cli_id, err := lookupEnv("CLIENT_ID")
+	if err != nil {
+		return err
+	}
+
+	cli_secret, err := lookupEnv("CLIENT_SECRET")
+	if err != nil {
+		return err
+	}
 	proxy_prefix := "/proxy"
 	fh_prefix := "/fasthttp"
-	secret := []byte(os.Getenv("TOKEN_SECRET"))
+	secret_str, err := lookupEnv("TOKEN_SECRET")
+	if err != nil {
+		return err
+	}
+	secret := []byte(secret_str)
 	getS := MakeGetSession(ctx, db)
 	retrieveS := MakeRetrieveSession(getS, secret)
 	proxy := MakeProxy()
@@ -42,8 +54,8 @@ func f() error {
 	app := fiber.New()
 	app.Get("/oauth2_callback", MakeOauthCallback(
 		MakeCode2Token(
-			os.Getenv("CLIENT_ID"),
-			os.Getenv("CLIENT_SECRET"),
+			cli_id,
+			cli_secret,
 		),
 		MakeNewSessionToken(secret),
 		MakeSetSessionToken(ctx, db),
