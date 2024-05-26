@@ -1,6 +1,6 @@
 all: bin/actdata
 
-models: .database.db
+models: .database.db tools/sqlboiler tools/sqlboiler-sqlite3
 	rm -rf $@
 	sqlboiler --no-hooks sqlite3
 
@@ -11,6 +11,14 @@ models: .database.db
 .(PHONY): bin/actdata
 bin/%: *.go models apis
 	go build -o $@
+
+tools/sqlboiler:
+	mkdir -p tools
+	env GOBIN=$$PWD/tools go install github.com/volatiletech/sqlboiler/v4@latest
+
+tools/sqlboiler-sqlite3:
+	mkdir -p tools
+	env GOBIN=$$PWD/tools go install github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-sqlite3@latest
 
 apis: api.json
 	rm -rf $@
