@@ -26,20 +26,22 @@ func main() {
 }
 func f() error {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "./database.db?_pragma=foreign_keys(1)")
-	if err != nil {
-		return err
-	}
-	var cli_id, cli_secret, secret_str string
+	var err error
+	var dsn, cli_id, cli_secret, secret_str string
 	for key, out := range map[string]*string{
 		"CLIENT_ID":     &cli_id,
 		"CLIENT_SECRET": &cli_secret,
 		"TOKEN_SECRET":  &secret_str,
+		"DSN":           &dsn,
 	} {
 		v, env_err := lookupEnv(key)
 		err = errors.Join(err, env_err)
 		*out = v
 	}
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return err
 	}

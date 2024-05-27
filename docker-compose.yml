@@ -1,0 +1,36 @@
+version: '3.7'
+services:
+  migrate:
+    build: .
+    volumes:
+      - type: volume
+        source: sqlite
+        target: /var/db/actdata
+        read_only: false
+    command: sqlite3 -init /usr/lib/actdata/dbschema.sqlite.sql /var/db/actdata/database.db
+    restart: on-failure
+    networks:
+      - intranet
+  actdata:
+    depends_on:
+      - migrate
+    build: .
+    ports:
+      - '8000:8000' # public
+    restart: unless-stopped
+    environment:
+      - DSN=/var/db/actdata/database.db?_pragma=foreign_keys(1)
+      - TOKEN_SECRET
+      - CLIENT_ID
+      - CLIENT_SECRET
+    volumes:
+      - type: volume
+        source: sqlite
+        target: /var/db/actdata
+        read_only: false
+    networks:
+      - intranet
+networks:
+  intranet:
+volumes:
+  sqlite:
