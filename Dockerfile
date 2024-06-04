@@ -1,8 +1,15 @@
 FROM golang:1.22 AS builder
 
-RUN apt-get update && apt-get upgrade -y && apt-get install sqlite3
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y sqlite3 npm openjdk-17-jre
+RUN go install github.com/volatiletech/sqlboiler/v4@latest
+RUN go install github.com/volatiletech/sqlboiler/v4/drivers/sqlboiler-sqlite3@latest
 
 WORKDIR /src
+
+COPY dbschema.sqlite.sql dbschema.sqlite.sql 
+RUN mkdir -p /usr/lib/actdata
+RUN cp /src/dbschema.sqlite.sql /usr/lib/actdata/dbschema.sqlite.sql 
 
 COPY go.mod go.mod
 COPY go.sum go.sum
@@ -14,12 +21,7 @@ RUN go mod download
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build make
 
-FROM gcr.io/distroless/base-nossl-debian12:nonroot AS runner
-
-RUN apt-get update && apt-get upgrade -y && apt-get install sqlite3
-
-COPY --from=builder --chown=nonroot:nonroot /src/bin/actdata /usr/bin/actdata
-COPY --from=builder --chown=nonroot:nonroot /src/dbschema.sqlite.sql /usr/lib/actdata/dbschema.sqlite.sql 
+RUN cp /src/bin/actdata /usr/bin/actdata
 
 EXPOSE 8000 8000
 
