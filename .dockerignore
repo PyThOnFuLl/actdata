@@ -1,0 +1,10 @@
+Dockerfile
+docker-compose.yml
+bin/
+models/
+apis/
+node_modules/
+api.json
+database.db
+.database.db
+.envrc
