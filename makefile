@@ -5,7 +5,7 @@ models: .database.db tools/sqlboiler tools/sqlboiler-sqlite3
 	sqlboiler --no-hooks sqlite3
 
 .database.db: dbschema.sqlite.sql
-	rm $@
+	rm -f $@
 	sqlite3 -init dbschema.sqlite.sql $@ .exit
 
 .(PHONY): bin/actdata
